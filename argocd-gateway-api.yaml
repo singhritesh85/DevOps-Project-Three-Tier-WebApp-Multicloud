@@ -1,0 +1,42 @@
+# kubectl create secret tls tls-argocd-ingress --cert=STAR_singhritesh85_com.crt --key=mykey.key -n argocd
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: argocd-gateway
+  namespace: argocd
+spec:
+  gatewayClassName: nginx # e.g., "nginx"
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "argocd.singhritesh85.com"
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "argocd.singhritesh85.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: tls-argocd-ingress
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: argocd-route
+  namespace: argocd
+spec:
+  parentRefs:
+  - name: argocd-gateway
+    namespace: argocd
+    sectionName: https
+  - name: argocd-gateway
+    namespace: argocd
+    sectionName: http
+  hostnames:
+  - "argocd.singhritesh85.com"
+  rules:
+  - backendRefs:
+    - name: argocd-server # Name of the Service created by the Helm chart
+      port: 80
