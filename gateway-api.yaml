@@ -1,0 +1,56 @@
+# kubectl create secret tls tls-three-tier-webapp-ingress --cert=STAR_singhritesh85_com.crt --key=mykey.key -n three-tier-webapp
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: three-tier-webapp-gateway
+  namespace: three-tier-webapp
+spec:
+  gatewayClassName: nginx # e.g., "nginx"
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "3tierwebapp.singhritesh85.com"
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "3tierwebapp.singhritesh85.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: tls-three-tier-webapp-ingress
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: three-tier-webapp-http-to-https-redirect
+  namespace: three-tier-webapp
+spec:
+  parentRefs:
+  - name: three-tier-webapp-gateway
+    namespace: three-tier-webapp
+    sectionName: http
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect:
+        scheme: https
+        statusCode: 301 # Use 301 for permanent redirect
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: three-tier-webapp-route-https
+  namespace: three-tier-webapp
+spec:
+  parentRefs:
+  - name: three-tier-webapp-gateway
+    namespace: three-tier-webapp
+    sectionName: https
+  hostnames:
+  - "3tierwebapp.singhritesh85.com"
+  rules:
+  - backendRefs:
+    - name: demo5-folo # Name of the Service created by the Helm chart
+      port: 80
