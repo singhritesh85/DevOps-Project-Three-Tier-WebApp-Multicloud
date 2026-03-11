@@ -1,0 +1,84 @@
+########################################### GCP Rabbitmq Server ################################################################################
+
+# Service Account in GCP
+resource "google_service_account" "memcached_sa" {
+  account_id   = "${var.prefix}-memcached-sa"
+  display_name = "${var.prefix} Service Account"
+}
+
+############################################ Reserver Internal IP Address for GCP VM Instance ###################################################
+
+resource "google_compute_address" "instance_internal_ip_memcached" {
+  name         = "${var.prefix}-instance-internal-ip"
+  description  = "Internal IP address reserved for VM Instance"
+  address_type = "INTERNAL"
+  region       = var.gcp_region
+  subnetwork   = google_compute_subnetwork.gke_public_subnet.id
+  address      = "10.20.0.20"
+}
+
+##################################################### Firewall Rule for RabbitMQ Server ##########################################################
+
+resource "google_compute_firewall" "firewall_rule_for_memcached_server" {
+  name    = "allow-memcached-ingress"
+  network = google_compute_network.gke_vpc.id  # Replace with your VPC network name
+
+  allow {
+    protocol = "tcp"
+    ports    = ["11211"]
+  }
+
+  source_ranges = ["172.25.0.0/16", "192.168.0.0/16", "10.10.0.0/20", "172.17.0.0/16", "172.19.0.0/16", "10.20.0.0/20"]
+  target_tags   = ["allow-memcached"] # Replace with your desired target tag
+}
+
+################################################ Create GCP Compute Engine VM instance ##########################################################
+
+resource "google_compute_address" "vm_static_ip_memcached" {
+  name         = "memcached-static-ip"
+  address_type = "EXTERNAL"
+  region       = "us-central1"  # Replace with your desired region
+  ip_version   = "IPV4"         # Default value is IPV4
+}
+
+resource "google_compute_instance" "vm_instance_memcached" {
+  name         = "${var.prefix}-memcached-vm-instance"
+  machine_type = var.machine_type
+  zone         = "us-central1-a"
+  boot_disk {
+    initialize_params {
+      image = "rocky-linux-8-v20260213"
+      size  = 20
+      type  = "pd-standard" ### Select among pd-standard, pd-balanced or pd-ssd.
+      architecture = "X86_64"
+    }
+  }
+  network_interface {
+    subnetwork = google_compute_subnetwork.gke_public_subnet.id
+    network_ip = google_compute_address.instance_internal_ip_memcached.address
+    access_config {
+      nat_ip = google_compute_address.vm_static_ip_memcached.address   ### Static IP Assigned to GCP VM Instance.
+    }
+  }
+  service_account {
+    email = google_service_account.memcached_sa.email
+    scopes = ["cloud-platform"]
+  }
+  metadata_startup_script = file("startup-memcached.sh")
+
+  tags = ["allow-ssh", "allow-memcached"]
+
+  depends_on = [google_compute_disk.persistent_disk_memcached]
+}
+
+resource "google_compute_disk" "persistent_disk_memcached" {
+  name  = "${var.prefix}-persistent-disk-memcached"
+  type  = "pd-standard"
+  zone  = "us-central1-a"
+  size  = 20
+}
+
+resource "google_compute_attached_disk" "attach_persistent_disk_memcached" {
+  disk     = google_compute_disk.persistent_disk_memcached.id
+  instance = google_compute_instance.vm_instance_memcached.id
+}
