@@ -1,0 +1,28 @@
+# kubectl create secret tls ingress-tls --key server.key --cert f58ce5a18a182d4b.crt --namespace backend
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wildfly-ingress
+  namespace: backend
+  annotations:
+    kubernetes.io/ingress.class: "gce" # Specify the Ingress class
+    kubernetes.io/ingress.allow-http: "false"
+#    cloud.google.com/backend-config: '{"default": "bankapp-backendconfig"}'
+spec:
+  ingressClassName: "gce"
+  tls:
+  - hosts:
+    - threetierwebapp.singhritesh85.com
+    secretName: ingress-tls
+  rules:
+  - host: "threetierwebapp.singhritesh85.com"
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: wildfly-folo
+            port:
+              number: 80
