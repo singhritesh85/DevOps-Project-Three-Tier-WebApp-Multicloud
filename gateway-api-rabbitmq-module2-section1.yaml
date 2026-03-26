@@ -1,4 +1,4 @@
-# kubectl create secret tls tls-rabbitmq-ingress --cert=STAR_singhritesh85_com.crt --key=mykey.key -n three-tier-webapp
+# kubectl create secret tls tls-rabbitmq-ingress --cert=STAR_singhritesh85_com.crt --key=mykey.key -n rabbitmq
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: Gateway
 metadata:
