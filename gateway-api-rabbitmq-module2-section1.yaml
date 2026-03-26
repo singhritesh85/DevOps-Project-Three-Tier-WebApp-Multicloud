@@ -1,0 +1,56 @@
+# kubectl create secret tls tls-rabbitmq-ingress --cert=STAR_singhritesh85_com.crt --key=mykey.key -n three-tier-webapp
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: Gateway
+metadata:
+  name: rabbitmq-gateway
+  namespace: rabbitmq
+spec:
+  gatewayClassName: nginx # e.g., "nginx"
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    hostname: "rabbitmq.singhritesh85.com"
+  - name: https
+    protocol: HTTPS
+    port: 443
+    hostname: "rabbitmq.singhritesh85.com"
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: tls-rabbitmq-ingress
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rabbitmq-http-to-https-redirect
+  namespace: rabbitmq
+spec:
+  parentRefs:
+  - name: rabbitmq-gateway
+    namespace: rabbitmq
+    sectionName: http
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect:
+        scheme: https
+        statusCode: 301 # Use 301 for permanent redirect
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: HTTPRoute
+metadata:
+  name: rabbitmq-route-https
+  namespace: rabbitmq
+spec:
+  parentRefs:
+  - name: rabbitmq-gateway
+    namespace: rabbitmq
+    sectionName: https
+  hostnames:
+  - "rabbitmq.singhritesh85.com"
+  rules:
+  - backendRefs:
+    - name: rabbitmq # Name of the Service created by the Helm chart
+      port: 5672
