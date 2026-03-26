@@ -53,4 +53,4 @@ spec:
   rules:
   - backendRefs:
     - name: rabbitmq # Name of the Service created by the Helm chart
-      port: 5672
+      port: 15672
