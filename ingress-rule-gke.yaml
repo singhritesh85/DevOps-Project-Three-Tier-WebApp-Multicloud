@@ -3,7 +3,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: wildfly-ingress
+  name: tomcat-ingress
   namespace: backend
   annotations:
     kubernetes.io/ingress.class: "gce" # Specify the Ingress class
@@ -23,6 +23,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: wildfly-folo
+            name: tomcat-folo
             port:
               number: 80
