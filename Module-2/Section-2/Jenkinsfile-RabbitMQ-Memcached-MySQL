@@ -1,0 +1,68 @@
+pipeline{
+    agent{
+         node{
+             label "Slave-1"
+             customWorkspace "/home/k8s-management/demo"
+         }
+    }
+    environment{
+        JAVA_HOME="/usr/lib/jvm/java-17-amazon-corretto.x86_64"
+        PATH="$PATH:$JAVA_HOME/bin:/opt/apache-maven/bin:/opt/node-v16.0.0/bin:/usr/local/bin"
+    }
+    parameters { 
+        string(name: 'COMMIT_ID', defaultValue: '', description: 'Provide the Commit ID')
+    }
+    stages{
+        stage("clone-repo"){
+            steps{
+                cleanWs()
+                checkout scmGit(branches: [[name: '${COMMIT_ID}']], extensions: [], userRemoteConfigs: [[credentialsId: 'github-cred', url: 'https://github.com/singhritesh85/Three-tier-WebApplication-updated.git']])
+            }
+        }
+        stage("Create Namespace, Label Namespace and Create ConfiMap") {
+            steps{
+                sh '''    #!/bin/bash
+                          kubectl get namespace mysql --context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster || kubectl create namespace mysql --context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster
+                          kubectl label ns mysql istio-injection=enabled --overwrite --context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster
+                          kubectl get namespace mysql --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev || kubectl create namespace mysql --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev
+                          kubectl label ns mysql istio-injection=enabled --overwrite --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev
+                          
+                          kubectl get namespace rabbitmq --context=multicloud-aks-cluster || kubectl create namespace rabbitmq --context=multicloud-aks-cluster
+                          kubectl label ns rabbitmq istio-injection=enabled --overwrite --context=multicloud-aks-cluster
+                          kubectl get namespace rabbitmq --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev || kubectl create namespace rabbitmq --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev
+                          kubectl label ns rabbitmq istio-injection=enabled --overwrite --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev
+                          
+                          kubectl get namespace memcached --context=multicloud-aks-cluster || kubectl create namespace memcached --context=multicloud-aks-cluster
+                          kubectl label ns memcached istio-injection=enabled --overwrite --context=multicloud-aks-cluster
+                          kubectl get namespace memcached --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev || kubectl create namespace memcached --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev
+                          kubectl label ns memcached istio-injection=enabled --overwrite --context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev
+                          
+                          if [[ -z `/bin/bash -c "kubectl get cm -n mysql --context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster|grep db-scheme|cut -d ' ' -f1"` ]]
+                          then
+                             kubectl create configmap db-scheme --from-file=src/main/resources/db_backup.sql -n mysql --context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster
+                          fi
+                '''          
+            }
+        }
+        stage("RabbitMQ-Deployment"){
+            steps{
+                sh 'yes|argocd login argocd.singhritesh85.com --username admin --password Admin123 --grpc-web'
+                //RabbitMQ
+                sh 'argocd app create rabbitmq --project default --repo https://github.com/singhritesh85/helm-repo-for-bitnami-update-GKE.git --path ./bitnami/rabbitmq --dest-namespace rabbitmq --sync-option CreateNamespace=true --dest-server https://multicloud-cluster-dns-th76ywww.268b557f4c9f92e41f115a20212d2094.privatelink.eastus.azmk8s.io:443 --helm-set auth.username=ritesh --helm-set auth.password=Dexter@123 --helm-set auth.erlangCookie=c2VjcmV0Y29va2ll --helm-set metrics.enabled=false --helm-set persistence.enabled=true --helm-set persistence.size=1Gi --helm-set clustering.enabled=true --helm-set replicaCount=3 --helm-set service.type=ClusterIP --helm-set service.ports.manager=15672 --upsert'
+                sh 'argocd app sync rabbitmq --kube-context=multicloud-aks-cluster'
+                sh 'argocd app create rabbitmq --project default --repo https://github.com/singhritesh85/helm-repo-for-bitnami-update-only-service.git --path ./bitnami/rabbitmq --dest-namespace rabbitmq --sync-option CreateNamespace=true --dest-server https://kubernetes.default.svc --helm-set auth.username=ritesh --helm-set auth.password=Dexter@123 --helm-set auth.erlangCookie=c2VjcmV0Y29va2ll --helm-set metrics.enabled=false --helm-set persistence.enabled=false --helm-set clustering.enabled=true --helm-set replicaCount=3 --helm-set service.type=ClusterIP --helm-set service.ports.manager=15672 --upsert'
+                sh 'argocd app sync rabbitmq --kube-context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev'
+                //Memcached
+                sh 'argocd app create memcached --project default --repo https://github.com/singhritesh85/helm-repo-for-bitnami-update-GKE.git --path ./bitnami/memcached --dest-namespace memcached --sync-option CreateNamespace=true --dest-server https://multicloud-cluster-dns-th76ywww.268b557f4c9f92e41f115a20212d2094.privatelink.eastus.azmk8s.io:443 --helm-set replicaCount=2 --helm-set persistence.enabled=true --helm-set persistence.size=1Gi --helm-set containerPorts.memcached=11211 --helm-set architecture=high-availability --helm-set service.clusterIP=None --helm-set service.ports.memcached=11211 --kube-context=multicloud-aks-cluster --upsert'
+                sh 'argocd app sync memcached --kube-context=multicloud-aks-cluster'
+                sh 'argocd app create memcached --project default --repo https://github.com/singhritesh85/helm-repo-for-bitnami-update-only-service.git --path ./bitnami/memcached --dest-namespace memcached --sync-option CreateNamespace=true --dest-server https://kubernetes.default.svc --helm-set replicaCount=2 --helm-set persistence.enabled=false --helm-set containerPorts.memcached=11211 --helm-set architecture=high-availability --helm-set service.clusterIP=None --helm-set service.ports.memcached=11211 --kube-context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev --upsert'
+                sh 'argocd app sync memcached --kube-context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev'
+                //MySQL8
+                sh 'argocd app create mysql --project default --repo https://github.com/singhritesh85/helm-repo-for-bitnami-update-GKE.git --path ./bitnami/mysql --dest-namespace mysql --sync-option CreateNamespace=true --dest-server https://172.16.0.3 --helm-set secondary.replicaCount=1 --helm-set primary.persistence.enabled=true --helm-set primary.persistence.size=1Gi --helm-set architecture=replication --helm-set global.storageClass=standard-rwo --helm-set secondary.persistence.enabled=true --helm-set secondary.persistence.size=1Gi --helm-set primary.service.type=ClusterIP --helm-set auth.rootPassword=Dexter@123 --helm-set auth.database=accounts --helm-set initdbScriptsConfigMap=db-scheme --kube-context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster --upsert'
+                sh 'argocd app sync mysql --kube-context=gke_wise-trainer-244916_us-central1_multicloud-gke-cluster'
+                sh 'argocd app create mysql --project default --repo https://github.com/singhritesh85/helm-repo-for-bitnami-update-only-service.git --path ./bitnami/mysql --dest-namespace mysql --sync-option CreateNamespace=true --dest-server https://kubernetes.default.svc --helm-set secondary.replicaCount=1 --helm-set primary.persistence.enabled=false --helm-set architecture=replication --helm-set global.storageClass=standard-rwo --helm-set secondary.persistence.enabled=false --helm-set primary.service.type=ClusterIP --helm-set auth.rootPassword=Dexter@123 --helm-set auth.database=accounts --helm-set initdbScriptsConfigMap=db-scheme --kube-context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev --upsert'
+                sh 'argocd app sync mysql --kube-context=arn:aws:eks:us-east-2:027330342406:cluster/eks-demo-cluster-dev'
+            }
+        }
+    }    
+}
