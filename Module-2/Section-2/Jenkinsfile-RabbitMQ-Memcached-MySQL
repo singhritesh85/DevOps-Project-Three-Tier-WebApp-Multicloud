@@ -46,7 +46,7 @@ pipeline{
                 '''          
             }
         }
-        stage("RabbitMQ-Deployment"){
+        stage("RabbitMQ-Memcached-MySQL8-Deployment"){
             steps{
                 sh 'yes|argocd login argocd.singhritesh85.com --username admin --password Admin123 --grpc-web'
                 //RabbitMQ
