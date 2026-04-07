@@ -1,4 +1,4 @@
-**Follow the below steps to create Istio Multicluster setup in Private EKS, Private GKE and Private AKS**
+**Follow the below steps to create Istio Multicluster setup among Private EKS, Private GKE and Private AKS**
 ```
 curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.28.3 sh -
 ```
