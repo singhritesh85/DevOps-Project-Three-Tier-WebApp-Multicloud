@@ -10,8 +10,8 @@ provider "google" {
 }
 
 provider "azurerm" {
-  subscription_id = "51283936-af44-49c6-9a24-f1cbdc17915d"
-  tenant_id = "8a0fce19-3824-4678-8769-b6c8e37a33ff"
+  subscription_id = "5XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
+  tenant_id = "XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX"
   features {
     log_analytics_workspace {
       permanently_delete_on_destroy = true
